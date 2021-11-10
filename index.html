@@ -1,0 +1,248 @@
+<html>
+	<head>
+		<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+		
+		<script type="text/javascript" src="util/gl-matrix.js"></script>
+		<script type="text/javascript" src="util/webgl-utils.js"></script>
+		
+		
+		<script type="text/javascript" src="src/main.js"></script>
+		
+		<script type="text/javascript" src="src/objects/grid.js"></script>
+		<script type="text/javascript" src="src/objects/block.js"></script>
+		<script type="text/javascript" src="src/objects/cylinder.js"></script>
+		<script type="text/javascript" src="src/objects/texture.js"></script>
+		<script type="text/javascript" src="src/objects/tetracube.js"></script>
+		<script type="text/javascript" src="src/objects/shapes.js"></script>
+		
+		<script type="text/javascript" src="src/projection.js"></script>
+		<script type="text/javascript" src="src/view.js"></script>
+		<script type="text/javascript" src="src/inputhandler.js"></script>
+		<script type="text/javascript" src="src/objectmanager.js"></script>
+		<script type="text/javascript" src="src/gamemanager.js"></script>
+		<script type="text/javascript" src="src/animationhandler.js"></script>
+		
+		<!--fragment shader for gouraud shading -->
+		<script id="fragmentshadergouraud" type="x-shader/x-fragment">
+			precision mediump float;
+			varying vec2 vTexCoords;
+			varying float ambient;
+			varying float diffuse;
+			varying float specular;
+			
+			
+			uniform sampler2D uTexture;
+			
+			void main(void) {
+				vec4 TexelColor = texture2D(uTexture, vTexCoords);
+				vec3 tcolor = vec3(TexelColor.x,TexelColor.y,TexelColor.z);
+				vec3 specularColor = vec3(1.0,1.0,1.0);
+				gl_FragColor = vec4(specularColor * specular + tcolor * (ambient + diffuse),TexelColor.a);
+			}
+		</script>
+
+		<!--vertex shader for gouraud shading -->
+		<script id="vertexshadergouraud" type="x-shader/x-vertex">
+			attribute vec3 aVertexPosition;
+			attribute vec2 aTexCoords;
+			attribute vec3 aVertexNormal;
+			
+			uniform float Ka;
+			uniform float Kd;
+			uniform float Ks;
+
+			uniform mat4 uVMatrix;
+			uniform mat4 uMMatrix;
+			uniform mat4 uPMatrix;
+			uniform mat3 uNormalMatrix;
+			
+			varying vec2 vTexCoords;
+			varying float ambient;
+			varying float diffuse;
+			varying float specular;
+
+			void main(void) {
+				gl_Position = uPMatrix * uVMatrix * uMMatrix * vec4(aVertexPosition, 1.0);
+				vTexCoords = aTexCoords;
+				
+				vec3 light = vec3(-1,-1,-1);
+				
+				vec3 normal = uNormalMatrix * aVertexNormal;
+				
+				vec3 pos = vec3(gl_Position.x/gl_Position.w,gl_Position.y/gl_Position.w,gl_Position.z/gl_Position.w);
+				
+				vec3 N = normalize(normal);
+				vec3 L = normalize(-light);
+				
+				
+				float lamb = max(dot(L,N), 0.0);
+				float spec = 0.0;
+				if(lamb > 0.0){
+					vec3 R = reflect(-L ,N);
+					vec3 V = normalize(-pos);
+					
+					float specAngle = max(dot(R, V), 0.0);
+					spec = pow(specAngle, 10.0);
+				}
+				
+				ambient = Ka;
+				diffuse = Kd * lamb;
+				specular = Ks * spec;
+			}
+		</script>
+		
+		
+		<!--fragment shader for phong shading -->
+		<script id="fragmentshaderphong" type="x-shader/x-fragment">
+			precision mediump float;
+			varying vec2 vTexCoords;
+			
+			varying vec3 normal;
+			varying vec3 pos;
+			
+			uniform float Ka;
+			uniform float Kd;
+			uniform float Ks;
+			
+			uniform sampler2D uTexture;
+			
+			void main(void) {
+			
+				
+				vec3 light = vec3(-1,-1,-1);
+			
+				vec3 N = normalize(normal);
+				vec3 L = normalize(-light);
+				
+				
+				float lamb = max(dot(L,N), 0.0);
+				float spec = 0.0;
+				if(lamb > 0.0){
+					vec3 R = reflect(-L ,N);
+					vec3 V = normalize(-pos);
+					
+					float specAngle = max(dot(R, V), 0.0);
+					spec = pow(specAngle, 10.0);
+				}
+				
+				float ambient = Ka;
+				float diffuse = Kd * lamb;
+				float specular = Ks * spec;
+			
+			
+			
+				vec4 TexelColor = texture2D(uTexture, vTexCoords);
+				vec3 tcolor = vec3(TexelColor.x,TexelColor.y,TexelColor.z);
+				vec3 specularColor = vec3(1.0,1.0,1.0);
+				gl_FragColor = vec4(specularColor * specular + tcolor * (ambient + diffuse),TexelColor.a);
+			}
+		</script>
+
+		<!--vertex shader for phong shading -->
+		<script id="vertexshaderphong" type="x-shader/x-vertex">
+			attribute vec3 aVertexPosition;
+			attribute vec2 aTexCoords;
+			attribute vec3 aVertexNormal;
+
+			uniform mat4 uVMatrix;
+			uniform mat4 uMMatrix;
+			uniform mat4 uPMatrix;
+			uniform mat3 uNormalMatrix;
+			
+			varying vec2 vTexCoords;
+			varying vec3 normal;
+			varying vec3 pos;
+
+			void main(void) {
+				gl_Position = uPMatrix * uVMatrix * uMMatrix * vec4(aVertexPosition, 1.0);
+				vTexCoords = aTexCoords;
+				
+				normal = uNormalMatrix * aVertexNormal;
+				
+				pos = vec3(gl_Position.x/gl_Position.w,gl_Position.y/gl_Position.w,gl_Position.z/gl_Position.w);
+			}
+		</script>
+		
+	</head>
+	
+	<body onload="webGLStart();">
+		<div>
+			<canvas style="float: left;margin-right: 10px;" id="lab01-canvas" width="350" height="700"></canvas>
+		
+			<p> Shading: <span id = "shading">Gouraud</span></p>
+			<p>
+				Ambient
+				<input type="range" min="0.0" max="1.0" step="0.1" value="0.5" id="ambient">
+				<span id = "ambval"></span>
+			</p>
+			<p>
+				Diffuse
+				<input type="range" min="0.0" max="1.0" step="0.1" value="0.5" id="diffuse">
+				<span id = "diffval"></span>
+			</p>
+			<p>
+				Specular
+				<input type="range" min="0.0" max="1.0" step="0.1" value="0.5" id="specular">
+				<span id = "specval"></span>
+			</p>
+			<p>
+				"->" or "d": move the object drawn one unit in the positive x direction<br>
+				"<-" or "a": move the object drawn one unit in the negative x direction<br>
+				"/\" or "w": move the object drawn one unit in the positive z direction<br>
+				"\/" or "s": move the object drawn one unit in the negative z direction<br>
+				"x": rotate the object drawn 90 degrees counterclockwise around the x axis<br>
+				"X": rotate the object drawn 90 degrees clockwise around the x axis<br>
+				"y": rotate the object drawn 90 degrees counterclockwise around the y axis<br>
+				"Y": rotate the object drawn 90 degrees clockwise around the y axis<br>
+				"z": rotate the object drawn 90 degrees counterclockwise around the z axis<br>
+				"Z": rotate the object drawn 90 degrees clockwise around the z axis<br>
+				"p": (un)pause the game (i.e. stop/restart gravity)<br>
+				"space bar": release the control of the current object (and have it drop down) <br>
+				"g": toggles between displaying the underlying 3D grid as a wireframe or not<br>
+				"j": the viewpoint should rotate counterclockwise about the Y-axis around the center of the grid.<br>
+				"l": the viewpoint should rotate clockwise about the Y-axis around the center of the grid.<br>
+				"i": the viewpoint should rotate counterclockwise about the X-axis around the center of the grid.<br>
+				"k": the viewpoint should rotate clockwise about the X-axis around the center of the grid.<br>
+				"u": the viewpoint should rotate counterclockwise about the Z-axis around the center of the grid.<br>
+				"o": the viewpoint should rotate clockwise about the Z-axis around the center of the grid.<br>
+				"+": zoom in<br>
+				"-": zoom out.<br>
+				"v": toggle between orthographic and perspective viewing.<br>
+				"f": toggles between Gouraud and Per-Pixel-shading<br>
+
+
+			</p>
+		</div>
+		
+		<script>
+			var slideramb = document.getElementById("ambient");
+			var outamb = document.getElementById("ambval");
+			outamb.innerHTML = slideramb.value;
+			
+			slideramb.oninput = function() {
+				outamb.innerHTML = this.value;
+				setkaUniform(this.value);
+			} 
+			
+			var sliderdiff = document.getElementById("diffuse");
+			var outdiff = document.getElementById("diffval");
+			outdiff.innerHTML = sliderdiff.value;
+			
+			sliderdiff.oninput = function() {
+				outdiff.innerHTML = this.value;
+				setkdUniform(this.value);
+			} 
+			
+			var sliderspec = document.getElementById("specular");
+			var outspec = document.getElementById("specval");
+			outspec.innerHTML = sliderspec.value;
+			
+			sliderspec.oninput = function() {
+				outspec.innerHTML = this.value;
+				setksUniform(this.value);
+			}
+		</script>
+
+		
+	</body>
+</html>
